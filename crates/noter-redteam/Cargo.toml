@@ -1,0 +1,17 @@
+[package]
+name = "noter-redteam"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER adversarial review: attack harness asserting fail-closed behavior across crypto, store, sync, mesh, airgap, share."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+noter-store = { path = "../noter-store" }
+noter-model = { path = "../noter-model" }
+noter-sync = { path = "../noter-sync" }
+noter-mesh = { path = "../noter-mesh" }
+noter-airgap = { path = "../noter-airgap" }
+noter-search = { path = "../noter-search" }
+noter-share = { path = "../noter-share" }
+noter-ui = { path = "../noter-ui" }
+serde_json = "1"

@@ -1,0 +1,12 @@
+[package]
+name = "noter-store"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER encrypted local store: SQLCipher whole-file encryption + XChaCha20-Poly1305 sealed payloads."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

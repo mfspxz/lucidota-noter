@@ -1,0 +1,20 @@
+[package]
+name = "noter-ui"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER desktop command layer: every UI operation as a tested pure function over the core. Tauri shell wiring lives in tauri-app/."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+noter-store = { path = "../noter-store" }
+noter-model = { path = "../noter-model" }
+noter-sync = { path = "../noter-sync" }
+noter-mesh = { path = "../noter-mesh" }
+noter-airgap = { path = "../noter-airgap" }
+noter-search = { path = "../noter-search" }
+noter-share = { path = "../noter-share" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+blake3 = "1"
+uuid = { version = "1", features = ["v4"] }

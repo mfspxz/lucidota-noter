@@ -1,0 +1,20 @@
+[package]
+name = "noter-organelle"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER as an organelle: the encrypted notes API behind the organelle host contract (codon nt)."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+noter-store = { path = "../noter-store" }
+noter-model = { path = "../noter-model" }
+noter-sync = { path = "../noter-sync" }
+noter-search = { path = "../noter-search" }
+noter-share = { path = "../noter-share" }
+noter-ui = { path = "../noter-ui" }
+organelle-host = { path = "../../../organelles/crates/organelle-host" }
+organelle-manifest = { path = "../../../organelles/crates/organelle-manifest" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+thiserror = "1"

@@ -1,0 +1,13 @@
+[package]
+name = "noter-model"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER note model: markdown notes, attachment descriptors, graph links (wikilinks + backlinks)."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+noter-store = { path = "../noter-store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+uuid = { version = "1", features = ["v4"] }

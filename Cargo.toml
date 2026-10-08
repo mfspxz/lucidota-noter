@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/noter-crypto",
+    "crates/noter-store",
+    "crates/noter-model",
+    "crates/noter-sync",
+    "crates/noter-mesh",
+    "crates/noter-airgap",
+    "crates/noter-search",
+    "crates/noter-share",
+    "crates/noter-ui",
+    "crates/noter-mobile",
+    "crates/noter-redteam",
+    "crates/noter-organelle",
+]

@@ -1,0 +1,12 @@
+[package]
+name = "noter-search"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER local full-text search: token index persisted as one sealed blob in the encrypted store."
+
+[dependencies]
+noter-crypto = { path = "../noter-crypto" }
+noter-store = { path = "../noter-store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

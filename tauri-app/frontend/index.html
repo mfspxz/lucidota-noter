@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NOTER</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: #111; color: #eee; }
+  #sidebar { width: 280px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+  #notes { flex: 1; overflow-y: auto; }
+  .note-item { padding: 10px 12px; border-bottom: 1px solid #222; cursor: pointer; }
+  .note-item:hover { background: #1c1c1c; }
+  #editor { flex: 1; display: flex; flex-direction: column; padding: 16px; }
+  #title { font-size: 1.4em; background: #111; color: #eee; border: none; outline: none; margin-bottom: 8px; }
+  #body { flex: 1; background: #161616; color: #eee; border: 1px solid #333; font-family: monospace; font-size: 14px; padding: 12px; resize: none; }
+  #toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #333; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 6px 12px; cursor: pointer; }
+  #lock { margin: auto; text-align: center; }
+  #lock input { display: block; margin: 8px auto; padding: 8px; width: 280px; background: #1a1a1a; color: #eee; border: 1px solid #444; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="lock">
+  <h1>NOTER</h1>
+  <input id="dbpath" placeholder="vault path (e.g. ~/notes.db)">
+  <input id="pass" type="password" placeholder="passphrase">
+  <input id="salt" placeholder="salt hex (first run: leave blank to generate)">
+  <button id="unlock">Unlock</button>
+  <p id="lockerr" style="color:#f66"></p>
+</div>
+<div id="app" class="hidden">
+  <div id="sidebar">
+    <div id="toolbar">
+      <button id="new">+ New</button>
+      <button id="sync">Sync</button>
+      <button id="airgap">Airgap</button>
+    </div>
+    <input id="q" placeholder="search…" style="margin:8px;padding:8px;background:#1a1a1a;color:#eee;border:1px solid #444">
+    <div id="notes"></div>
+  </div>
+  <div id="editor">
+    <input id="title" placeholder="title">
+    <textarea id="body" placeholder="markdown…"></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="save">Save</button>
+      <button id="del">Delete</button>
+      <span id="status" style="margin-left:auto;color:#888"></span>
+    </div>
+  </div>
+</div>
+<script>
+const { invoke } = window.__TAURI__.core;
+let currentId = null;
+const $ = id => document.getElementById(id);
+
+$('unlock').onclick = async () => {
+  let salt = $('salt').value.trim();
+  if (!salt) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    salt = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    $('salt').value = salt;
+  }
+  try {
+    const dev = await invoke('unlock', { dbPath: $('dbpath').value, passphrase: $('pass').value, saltHex: salt });
+    $('lock').classList.add('hidden'); $('app').classList.remove('hidden');
+    $('status').textContent = 'device ' + dev;
+    refresh();
+  } catch (e) { $('lockerr').textContent = e; }
+};
+async function refresh() {
+  const notes = await invoke('list_notes');
+  const box = $('notes'); box.innerHTML = '';
+  for (const n of notes) {
+    const d = document.createElement('div');
+    d.className = 'note-item'; d.textContent = n.title || '(untitled)';
+    d.onclick = () => openNote(n.id);
+    box.appendChild(d);
+  }
+}
+async function openNote(id) {
+  const n = await invoke('get_note', { id });
+  currentId = n.id; $('title').value = n.title; $('body').value = n.body_md;
+}
+$('new').onclick = async () => {
+  const n = await invoke('create_note', { title: 'Untitled', bodyMd: '', tags: [] });
+  refresh(); openNote(n.id);
+};
+$('save').onclick = async () => {
+  if (!currentId) return;
+  await invoke('update_note', { id: currentId, title: $('title').value, bodyMd: $('body').value, tags: [] });
+  $('status').textContent = 'saved'; refresh();
+};
+$('del').onclick = async () => {
+  if (!currentId) return;
+  await invoke('delete_note', { id: currentId });
+  currentId = null; $('title').value = ''; $('body').value = ''; refresh();
+};
+let qt;
+$('q').oninput = () => {
+  clearTimeout(qt);
+  qt = setTimeout(async () => {
+    const q = $('q').value.trim();
+    if (!q) return refresh();
+    const hits = await invoke('search', { query: q });
+    const box = $('notes'); box.innerHTML = '';
+    for (const h of hits) {
+      const d = document.createElement('div');
+      d.className = 'note-item'; d.textContent = h.title + '  (' + h.score + ')';
+      d.onclick = () => openNote(h.id);
+      box.appendChild(d);
+    }
+  }, 250);
+};
+$('airgap').onclick = async () => {
+  const frames = await invoke('export_airgap', { sinceMs: 0 });
+  await navigator.clipboard.writeText(frames.join('\n'));
+  $('status').textContent = frames.length + ' frames copied — scan/display as QR';
+};
+$('sync').onclick = () => { $('status').textContent = 'mesh sync: use CLI or pair via discovery (see README)'; };
+</script>
+</body>
+</html>

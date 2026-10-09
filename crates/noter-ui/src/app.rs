@@ -1,10 +1,7 @@
-use crate::{NoteSummary, NoteView, SearchHit, SyncReport};
 use noter_crypto::{derive_master_key, derive_subkey, DeviceIdentity, PublicIdentity, Salt, SecretBytes};
-use noter_mesh::Session;
-use noter_model::{Note, Notes};
-use noter_search::SearchIndex;
-use noter_store::{now_ms, Store, StoreError};
-use noter_sync::{MergeOutcome, SyncEngine};
+use noter_model::Notes;
+use noter_store::{Store, StoreError};
+use noter_sync::SyncEngine;
 use std::path::Path;
 use thiserror::Error;
 

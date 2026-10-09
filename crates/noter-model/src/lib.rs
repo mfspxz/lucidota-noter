@@ -27,16 +27,14 @@ pub fn extract_links(markdown: &str) -> Vec<String> {
             i += 3;
             continue;
         }
-        if &bytes[i..i + 2] == b"[[" {
-            if let Some(end) = markdown[i + 2..].find("]]") {
-                let inner = &markdown[i + 2..i + 2 + end];
-                let target = inner.split('|').next().unwrap_or("").trim();
-                if !target.is_empty() {
-                    out.push(target.to_string());
-                }
-                i += 2 + end + 2;
-                continue;
+        if &bytes[i..i + 2] == b"[[" && let Some(end) = markdown[i + 2..].find("]]") {
+            let inner = &markdown[i + 2..i + 2 + end];
+            let target = inner.split('|').next().unwrap_or("").trim();
+            if !target.is_empty() {
+                out.push(target.to_string());
             }
+            i += 2 + end + 2;
+            continue;
         }
         i += 1;
     }

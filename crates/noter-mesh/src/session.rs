@@ -45,6 +45,21 @@ impl MeshNode {
         let stream = TcpStream::connect(addr)?;
         Session::initiator(stream, &self.identity, &self.device_id)
     }
+
+    /// Broadcast our presence on the LAN for `stop_after`.
+    /// Pair with [`crate::discover`] on the peer side.
+    pub fn beacon(
+        &self,
+        tcp_port: u16,
+        stop_after: std::time::Duration,
+    ) -> Result<(), MeshError> {
+        crate::beacon(
+            &self.device_id,
+            tcp_port,
+            &self.identity.public().fingerprint(),
+            stop_after,
+        )
+    }
 }
 
 /// Identity attestation sent after the ephemeral handshake.
@@ -236,7 +251,7 @@ fn read_frame(stream: &mut TcpStream) -> Result<Vec<u8>, MeshError> {
         }
     })?;
     let len = u32::from_be_bytes(len_b) as usize;
-    if len > MAX_FRAME || len < 24 + 16 {
+    if !(24 + 16..=MAX_FRAME).contains(&len) {
         return Err(MeshError::BadFrame("frame length out of range"));
     }
     let mut buf = vec![0u8; len];

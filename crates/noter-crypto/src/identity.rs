@@ -24,7 +24,7 @@ impl DeviceIdentity {
     pub fn generate() -> Self {
         let mut csprng = OsRng;
         let signing = SigningKey::generate(&mut csprng);
-        let x_secret = StaticSecret::random_from_rng(&mut csprng);
+        let x_secret = StaticSecret::random_from_rng(csprng);
         Self { signing, x_secret }
     }
 
@@ -135,6 +135,11 @@ fn hex_of(bytes: &[u8]) -> String {
 }
 
 /// Perform X25519 key agreement: our static secret x their public key.
+///
+/// WARNING: returns the RAW shared secret. Never use this directly as an
+/// encryption key. Always pass it through a KDF first (see [`pairwise_key`]
+/// or derive with a domain-separated BLAKE3 keyed hash). Raw DH output is
+/// not uniformly random and may have structure an attacker can exploit.
 pub fn agree(ours: &StaticSecret, theirs: &XPublic) -> SecretBytes {
     SecretBytes::new(ours.diffie_hellman(theirs).to_bytes())
 }

@@ -23,7 +23,7 @@ mod discovery;
 mod error;
 mod session;
 
-pub use discovery::{discover, Beacon};
+pub use discovery::{beacon, discover, Beacon};
 pub use error::MeshError;
 pub use session::{MeshNode, Session};
 

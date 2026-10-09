@@ -1,6 +1,6 @@
 use crate::{Envelope, VectorCmp, VersionVector};
 use noter_crypto::{DeviceIdentity, PublicIdentity, SecretBytes};
-use noter_store::{now_ms, Store, StoreError};
+use noter_store::{Store, StoreError};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -231,11 +231,6 @@ mod tests {
 
     fn master() -> SecretBytes {
         SecretBytes::new([0x55u8; 32])
-    }
-
-    struct Dev<'a> {
-        eng: SyncEngine<'a>,
-        _id: DeviceIdentity,
     }
 
     fn device<'a>(name: &str, store: &'a Store) -> (DeviceIdentity, SyncEngine<'a>) {

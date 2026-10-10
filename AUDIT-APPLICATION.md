@@ -49,12 +49,12 @@ adopted by the auditor — me).
 | 3 | No forward secrecy for stored data | **WONT-FIX** | By design (user wants their own history); rekey implemented. Documented, frozen |
 | 4 | Sync metadata leaks to relay | **WONT-FIX** | Accepted for relay sync; content confidentiality holds. Documented, frozen |
 | 5 | Argon2id params fixed, uncalibrated | **FIX** | Small/medium: calibrate params or expose unlock-time target |
-| 6 | Conflict copies unbounded in theory | **FIX** | Small: GC policy or per-note conflict cap |
+| 6 | Conflict copies unbounded in theory | **FIXED 2026-10-10** | `SyncEngine::gc_conflict_copies` in `noter-sync/engine.rs`: after every conflict-copy write, tombstone oldest-first down to MAX_CONFLICT_COPIES=8 live copies per note. Bound holds per round, not eventually. Honest bound: tombstones are sync-correct but not compacted — hostile spam still grows tombstone history slowly (documented in code). R8 redteam property test (`r8_conflict_flood_bounded`) still green; new `conflict_copy_gc_caps_live_copies` test green. |
 | 7 | No audit log of security events | **FIXED 2026-10-10** | New `noter-auditlog` crate (noter-013): append-only JSONL, fail-open logging; wired into `App::unlock` (UnlockFailed), `cmd_sync_with_peer` (BadFrame/UnknownWriter/SignatureInvalid/EnvelopeRejected), `cmd_receive_share` (SenderMismatch/SignatureInvalid). 4 unit + 2 integration tests green; clippy clean. |
 
-**Second sweep (2026-10-10):** R-4 item #7 closed with production code.
-Remaining FIX items (#1 pairing UX — medium; #5 Argon2id calibration —
-small/medium; #6 conflict-copy GC — small) stay open with their
+**Second sweep (2026-10-10):** R-4 items #7 (audit log) and #6 (conflict
+GC) closed with production code. Remaining FIX items (#1 pairing UX —
+medium; #5 Argon2id calibration — small/medium) stay open with their
 budgets. WONT-FIX items (#2, #3, #4) frozen as documented.
 
 Backlog rule going forward: standing HIGHs get a FIX with a complexity

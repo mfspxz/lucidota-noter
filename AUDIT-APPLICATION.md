@@ -50,7 +50,12 @@ adopted by the auditor — me).
 | 4 | Sync metadata leaks to relay | **WONT-FIX** | Accepted for relay sync; content confidentiality holds. Documented, frozen |
 | 5 | Argon2id params fixed, uncalibrated | **FIX** | Small/medium: calibrate params or expose unlock-time target |
 | 6 | Conflict copies unbounded in theory | **FIX** | Small: GC policy or per-note conflict cap |
-| 7 | No audit log of security events | **FIX** | Low: log failed decryptions/rejections locally |
+| 7 | No audit log of security events | **FIXED 2026-10-10** | New `noter-auditlog` crate (noter-013): append-only JSONL, fail-open logging; wired into `App::unlock` (UnlockFailed), `cmd_sync_with_peer` (BadFrame/UnknownWriter/SignatureInvalid/EnvelopeRejected), `cmd_receive_share` (SenderMismatch/SignatureInvalid). 4 unit + 2 integration tests green; clippy clean. |
+
+**Second sweep (2026-10-10):** R-4 item #7 closed with production code.
+Remaining FIX items (#1 pairing UX — medium; #5 Argon2id calibration —
+small/medium; #6 conflict-copy GC — small) stay open with their
+budgets. WONT-FIX items (#2, #3, #4) frozen as documented.
 
 Backlog rule going forward: standing HIGHs get a FIX with a complexity
 budget or an explicit WONT-FIX above; the list must not grow unbounded.

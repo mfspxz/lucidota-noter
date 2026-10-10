@@ -2,6 +2,7 @@
 //! forwards to (see `tauri-app/src/main.rs`).
 
 use crate::{App, AppError, AttachmentView, NoteSummary, NoteView, SearchHit, SyncReport};
+use noter_auditlog::EventKind;
 use noter_crypto::PublicIdentity;
 use noter_mesh::Session;
 use noter_model::{AttachmentRef, Note};
@@ -234,10 +235,26 @@ pub fn cmd_receive_share(
     pkg_bytes: &[u8],
     sender: &PublicIdentity,
 ) -> Result<NoteView, AppError> {
-    let pkg = noter_share::SharePackage::from_bytes(pkg_bytes)?;
+    let pkg = noter_share::SharePackage::from_bytes(pkg_bytes).map_err(|e| {
+        app.audit(EventKind::EnvelopeRejected, "share package failed to parse");
+        AppError::from(e)
+    })?;
     let seed = app_identity_seed(app);
     let recipient = noter_crypto::DeviceIdentity::from_seed_bytes(&seed)?;
-    let (mut note, atts) = noter_share::receive_package(&pkg, &recipient, sender)?;
+    let (mut note, atts) = noter_share::receive_package(&pkg, &recipient, sender).map_err(|e| {
+        match &e {
+            noter_share::ShareError::SenderMismatch => {
+                app.audit(EventKind::SenderMismatch, "share package sender identity mismatch");
+            }
+            noter_share::ShareError::Crypto(_) => {
+                app.audit(EventKind::SignatureInvalid, "share package decrypt/signature failed");
+            }
+            noter_share::ShareError::Serde(_) => {
+                app.audit(EventKind::EnvelopeRejected, "share payload failed to parse");
+            }
+        }
+        AppError::from(e)
+    })?;
     // Fresh id so it merges cleanly into our vault; store before attaching.
     note.id = uuid::Uuid::new_v4().simple().to_string();
     note.attachments.clear();
@@ -288,6 +305,7 @@ pub fn cmd_sync_with_peer(
         let n = {
             let b = session.recv()?;
             if b.len() != 4 {
+                app.audit(EventKind::BadFrame, "sync: bad envelope count frame");
                 return Err(AppError::Mesh(noter_mesh::MeshError::BadFrame("bad count")));
             }
             u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize
@@ -295,12 +313,33 @@ pub fn cmd_sync_with_peer(
         let mut envs = Vec::with_capacity(n.min(100_000));
         for _ in 0..n {
             let b = session.recv()?;
-            envs.push(
-                noter_sync::Envelope::from_bytes(&b)
-                    .map_err(|_| AppError::Mesh(noter_mesh::MeshError::BadFrame("bad envelope")))?,
-            );
+            let env = noter_sync::Envelope::from_bytes(&b).map_err(|_| {
+                app.audit(EventKind::BadFrame, "sync: envelope failed to parse");
+                AppError::Mesh(noter_mesh::MeshError::BadFrame("bad envelope"))
+            })?;
+            envs.push(env);
         }
-        Ok(engine.import(&envs)?)
+        match engine.import(&envs) {
+            Ok(o) => Ok(o),
+            Err(e) => {
+                match &e {
+                    noter_sync::SyncError::UnknownWriter(w) => {
+                        app.audit(EventKind::UnknownWriter, w);
+                    }
+                    noter_sync::SyncError::IdentityMismatch(d) => {
+                        app.audit(EventKind::SignatureInvalid, d);
+                    }
+                    noter_sync::SyncError::Crypto(_) => {
+                        app.audit(EventKind::EnvelopeRejected, "envelope crypto verification failed");
+                    }
+                    noter_sync::SyncError::Serde(_) => {
+                        app.audit(EventKind::EnvelopeRejected, "envelope payload parse failed");
+                    }
+                    noter_sync::SyncError::Store(_) => {}
+                }
+                Err(AppError::Sync(e))
+            }
+        }
     };
 
     let (sent, outcomes) = if send_first {
@@ -538,5 +577,35 @@ mod tests {
         // Right passphrase reopens.
         let app2 = App::unlock(&db, "correct horse battery staple", &salt).unwrap();
         assert_eq!(cmd_list_notes(&app2).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn unlock_failure_is_logged() {
+        let dir = tempfile_dir::Dir::new();
+        let db = dir.path().join("vault.db");
+        let salt = Salt::generate();
+        App::unlock(&db, "right passphrase", &salt).unwrap();
+        assert!(App::unlock(&db, "wrong passphrase", &salt).is_err());
+        let recs = noter_auditlog::read_all(&db.with_extension("audit.jsonl")).unwrap();
+        assert!(recs
+            .iter()
+            .any(|r| r.kind == noter_auditlog::EventKind::UnlockFailed));
+    }
+
+    #[test]
+    fn share_sender_mismatch_is_logged() {
+        let (app_a, _d1) = test_app("a");
+        let dir = tempfile_dir::Dir::new();
+        let app_b =
+            App::open_with_master(&dir.path().join("v.db"), SecretBytes::new([0x99u8; 32])).unwrap();
+        let v = cmd_create_note(&app_a, "Shared", "for bob", vec![]).unwrap();
+        let pkg = cmd_share_note(&app_a, &v.id, &app_b.public_identity()).unwrap();
+        // Wrong sender identity: rejected AND logged.
+        let fake_sender = DeviceIdentity::generate().public();
+        assert!(cmd_receive_share(&app_b, &pkg, &fake_sender).is_err());
+        let recs = noter_auditlog::read_all(&dir.path().join("v.audit.jsonl")).unwrap();
+        assert!(recs
+            .iter()
+            .any(|r| r.kind == noter_auditlog::EventKind::SenderMismatch));
     }
 }

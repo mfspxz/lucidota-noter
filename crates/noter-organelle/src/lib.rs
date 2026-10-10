@@ -5,6 +5,9 @@
 //! capability gating, input-schema validation, receipts, and the hash chain
 //! are enforced by the host, not reimplemented here.
 
+pub mod airgap;
+pub mod crypto;
+
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use noter_crypto::{PublicIdentity, SecretBytes};
 use noter_ui::{App, NoteView};
@@ -16,7 +19,7 @@ use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::Mutex;
 
-pub const CODON: &str = "nt";
+pub const CODON: &str = "no";
 pub const CAP_READ: &str = "notes.read";
 pub const CAP_WRITE: &str = "notes.write";
 
@@ -94,8 +97,9 @@ fn pub_identity_to_json(p: &PublicIdentity) -> Value {
     json!({ "ed25519": hex(&p.ed25519), "x25519": hex(&p.x25519) })
 }
 
-impl Organelle for NoterOrganelle {
-    fn manifest(&self) -> OrganelleManifest {
+/// The noter-notes manifest as a free function (also used to generate the
+/// static `organelles/noter-notes.manifest.json`; the two must agree).
+pub fn notes_manifest() -> OrganelleManifest {
         let ro = |op: &str, desc: &str, schema: Value| Contract {
             op: op.to_string(),
             description: desc.to_string(),
@@ -150,6 +154,11 @@ impl Organelle for NoterOrganelle {
                 chain: true,
             },
         }
+    }
+
+impl Organelle for NoterOrganelle {
+    fn manifest(&self) -> OrganelleManifest {
+        notes_manifest()
     }
 
     fn handle(
@@ -293,17 +302,17 @@ mod tests {
     fn manifest_registers_clean() {
         let (host, _dir) = test_host();
         let manifests = host.list_manifests();
-        assert!(manifests.iter().any(|m| m.codon == "nt" && m.name == "noter-notes"));
+        assert!(manifests.iter().any(|m| m.codon == "no" && m.name == "noter-notes"));
     }
 
     #[test]
     fn read_op_needs_read_cap() {
         let (host, _dir) = test_host();
         // No caps -> denied.
-        let r = host.call(&ctx(&[]), "nt", "list_notes", json!({}));
+        let r = host.call(&ctx(&[]), "no", "list_notes", json!({}));
         assert!(r.is_err());
         // Read cap -> ok.
-        let r = host.call(&ctx(&["notes.read"]), "nt", "list_notes", json!({}));
+        let r = host.call(&ctx(&["notes.read"]), "no", "list_notes", json!({}));
         assert!(r.unwrap().as_array().unwrap().is_empty());
     }
 
@@ -313,7 +322,7 @@ mod tests {
         // Read cap is not enough for writes.
         let r = host.call(
             &ctx(&["notes.read"]),
-            "nt",
+            "no",
             "create_note",
             json!({"title": "T", "body_md": "b"}),
         );
@@ -321,7 +330,7 @@ mod tests {
         // Write cap works.
         let r = host.call(
             &ctx(&["notes.write"]),
-            "nt",
+            "no",
             "create_note",
             json!({"title": "T", "body_md": "b", "tags": ["x"]}),
         )
@@ -330,7 +339,7 @@ mod tests {
         let id = r["id"].as_str().unwrap().to_string();
         // Read it back via organelle.
         let r = host
-            .call(&ctx(&["notes.read"]), "nt", "get_note", json!({"id": id}))
+            .call(&ctx(&["notes.read"]), "no", "get_note", json!({"id": id}))
             .unwrap();
         assert_eq!(r["body_md"], "b");
     }
@@ -340,22 +349,22 @@ mod tests {
         let (host, _dir) = test_host();
         let w = ctx(&["notes.write"]);
         let r = host
-            .call(&w, "nt", "create_note", json!({"title": "Alpha", "body_md": "zebra stripes"}))
+            .call(&w, "no", "create_note", json!({"title": "Alpha", "body_md": "zebra stripes"}))
             .unwrap();
         let id = r["id"].as_str().unwrap().to_string();
         host.call(
             &w,
-            "nt",
+            "no",
             "create_note",
             json!({"title": "Beta", "body_md": format!("see [[{}]]", id)}),
         )
         .unwrap();
         let hits = host
-            .call(&ctx(&["notes.read"]), "nt", "search", json!({"query": "zebra"}))
+            .call(&ctx(&["notes.read"]), "no", "search", json!({"query": "zebra"}))
             .unwrap();
         assert_eq!(hits.as_array().unwrap().len(), 1);
         let bl = host
-            .call(&ctx(&["notes.read"]), "nt", "backlinks", json!({"id": id}))
+            .call(&ctx(&["notes.read"]), "no", "backlinks", json!({"id": id}))
             .unwrap();
         assert_eq!(bl["backlinks"].as_array().unwrap().len(), 1);
     }
@@ -366,13 +375,13 @@ mod tests {
         // missing required body_md -> rejected by host schema validation.
         let r = host.call(
             &ctx(&["notes.write"]),
-            "nt",
+            "no",
             "create_note",
             json!({"title": "T"}),
         );
         assert!(r.is_err());
         // unknown op -> not found.
-        let r = host.call(&ctx(&["notes.write"]), "nt", "nope", json!({}));
+        let r = host.call(&ctx(&["notes.write"]), "no", "nope", json!({}));
         assert!(r.is_err());
     }
 
@@ -380,9 +389,9 @@ mod tests {
     fn receipts_chain_verifies() {
         let (host, _dir) = test_host();
         let w = ctx(&["notes.write"]);
-        host.call(&w, "nt", "create_note", json!({"title": "T", "body_md": "b"}))
+        host.call(&w, "no", "create_note", json!({"title": "T", "body_md": "b"}))
             .unwrap();
-        host.call(&ctx(&["notes.read"]), "nt", "list_notes", json!({}))
+        host.call(&ctx(&["notes.read"]), "no", "list_notes", json!({}))
             .unwrap();
         let n = host.verify_chain().expect("receipt chain must verify");
         assert!(n >= 3); // registration + 2 invocations
@@ -404,17 +413,17 @@ mod tests {
         register(&host_b, &dir.join("b.db"), SecretBytes::new([0xB2u8; 32])).unwrap();
 
         let dev_b: Value = host_b
-            .call(&ctx(&["notes.read"]), "nt", "device", json!({}))
+            .call(&ctx(&["notes.read"]), "no", "device", json!({}))
             .unwrap();
         let bob_pub = dev_b["identity"].clone();
         let dev_a: Value = host_a
-            .call(&ctx(&["notes.read"]), "nt", "device", json!({}))
+            .call(&ctx(&["notes.read"]), "no", "device", json!({}))
             .unwrap();
 
         let note = host_a
             .call(
                 &ctx(&["notes.write"]),
-                "nt",
+                "no",
                 "create_note",
                 json!({"title": "Shared", "body_md": "for bob"}),
             )
@@ -422,7 +431,7 @@ mod tests {
         let pkg = host_a
             .call(
                 &ctx(&["notes.write"]),
-                "nt",
+                "no",
                 "share_note",
                 json!({"note_id": note["id"], "recipient": bob_pub}),
             )
@@ -430,7 +439,7 @@ mod tests {
         let got = host_b
             .call(
                 &ctx(&["notes.write"]),
-                "nt",
+                "no",
                 "receive_share",
                 json!({"package_b64": pkg["package_b64"], "sender": dev_a["identity"]}),
             )
@@ -440,3 +449,4 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 }
+

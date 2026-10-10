@@ -525,6 +525,7 @@ name = "noter-organelle"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "noter-airgap",
  "noter-crypto",
  "noter-model",
  "noter-search",
@@ -536,6 +537,7 @@ dependencies = [
  "organelle-manifest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
 ]
 

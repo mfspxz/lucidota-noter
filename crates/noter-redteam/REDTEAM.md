@@ -1,5 +1,12 @@
 # NOTER red-team review (noter-011)
 
+> **R-1 instance scope (2026-10-10).** The 13 attacks below are a regression
+> battery for the exact instances tested — 13/13 GREEN means those 13
+> payloads fail, not that the attack class is closed. Any future fix's
+> `PROVEN` verdict requires a dedicated re-attack with NEW variants, not a
+> replay of these 13. Policy: never rewrite a property test's expectation
+> to match a behavior change without adversarial sign-off (R-7).
+
 Date: 2026-10-07. Method: executable attack battery
 (`crates/noter-redteam/tests/attacks.rs`, 13 attacks, all defeated) plus
 design review below. No custom crypto anywhere in the stack — every claim
@@ -34,6 +41,12 @@ SQLCipher (AES-256-CBC+HMAC).
 | R13 | Garbage / u64::MAX version vectors | Tolerated, no panic, sane ordering |
 
 ## Honest residual risks (not fixed; recorded)
+
+> **R-2 frozen bound (2026-10-10).** The guardrails above claim only what
+> the results table measures. The risks below define the boundary —
+> no hardening past this bound without a new evidenced threat.
+> Triage decisions (FIX vs WONT-FIX with complexity budgets) live in
+> `~/workspace/noter/AUDIT-APPLICATION.md` (R-4).
 
 1. **Pairing is the trust root.** There is no PKI: if attacker B tricks the
    user into pairing the attacker's device (QR shown on attacker's screen),

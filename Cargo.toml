@@ -13,4 +13,5 @@ members = [
     "crates/noter-mobile",
     "crates/noter-redteam",
     "crates/noter-organelle",
+    "crates/noter-auditlog",
 ]

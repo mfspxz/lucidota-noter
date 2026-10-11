@@ -313,7 +313,7 @@ mod tests {
         assert!(r.is_err());
         // Read cap -> ok.
         let r = host.call(&ctx(&["notes.read"]), "no", "list_notes", json!({}));
-        assert!(r.unwrap().as_array().unwrap().is_empty());
+        assert!(r.unwrap().output.as_array().unwrap().is_empty());
     }
 
     #[test]
@@ -335,13 +335,13 @@ mod tests {
             json!({"title": "T", "body_md": "b", "tags": ["x"]}),
         )
         .unwrap();
-        assert_eq!(r["title"], "T");
-        let id = r["id"].as_str().unwrap().to_string();
+        assert_eq!(r.output["title"], "T");
+        let id = r.output["id"].as_str().unwrap().to_string();
         // Read it back via organelle.
         let r = host
             .call(&ctx(&["notes.read"]), "no", "get_note", json!({"id": id}))
             .unwrap();
-        assert_eq!(r["body_md"], "b");
+        assert_eq!(r.output["body_md"], "b");
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
         let r = host
             .call(&w, "no", "create_note", json!({"title": "Alpha", "body_md": "zebra stripes"}))
             .unwrap();
-        let id = r["id"].as_str().unwrap().to_string();
+        let id = r.output["id"].as_str().unwrap().to_string();
         host.call(
             &w,
             "no",
@@ -362,11 +362,11 @@ mod tests {
         let hits = host
             .call(&ctx(&["notes.read"]), "no", "search", json!({"query": "zebra"}))
             .unwrap();
-        assert_eq!(hits.as_array().unwrap().len(), 1);
+        assert_eq!(hits.output.as_array().unwrap().len(), 1);
         let bl = host
             .call(&ctx(&["notes.read"]), "no", "backlinks", json!({"id": id}))
             .unwrap();
-        assert_eq!(bl["backlinks"].as_array().unwrap().len(), 1);
+        assert_eq!(bl.output["backlinks"].as_array().unwrap().len(), 1);
     }
 
     #[test]
@@ -414,11 +414,11 @@ mod tests {
 
         let dev_b: Value = host_b
             .call(&ctx(&["notes.read"]), "no", "device", json!({}))
-            .unwrap();
+            .unwrap().output;
         let bob_pub = dev_b["identity"].clone();
         let dev_a: Value = host_a
             .call(&ctx(&["notes.read"]), "no", "device", json!({}))
-            .unwrap();
+            .unwrap().output;
 
         let note = host_a
             .call(
@@ -433,7 +433,7 @@ mod tests {
                 &ctx(&["notes.write"]),
                 "no",
                 "share_note",
-                json!({"note_id": note["id"], "recipient": bob_pub}),
+                json!({"note_id": note.output["id"], "recipient": bob_pub}),
             )
             .unwrap();
         let got = host_b
@@ -441,11 +441,11 @@ mod tests {
                 &ctx(&["notes.write"]),
                 "no",
                 "receive_share",
-                json!({"package_b64": pkg["package_b64"], "sender": dev_a["identity"]}),
+                json!({"package_b64": pkg.output["package_b64"], "sender": dev_a["identity"]}),
             )
             .unwrap();
-        assert_eq!(got["title"], "Shared");
-        assert_eq!(got["body_md"], "for bob");
+        assert_eq!(got.output["title"], "Shared");
+        assert_eq!(got.output["body_md"], "for bob");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

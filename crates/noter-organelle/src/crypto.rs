@@ -260,31 +260,31 @@ mod tests {
 
         // keygen -> seal -> unseal roundtrip through the real AEAD
         let kg = host.call(&ctx, "ne", "keygen", json!({})).expect("keygen");
-        assert!(kg["fingerprint"].as_str().unwrap().len() > 0);
+        assert!(kg.output["fingerprint"].as_str().unwrap().len() > 0);
         let key_b64 = B64.encode([0x11u8; 32]);
         let sealed = host.call(&ctx, "ne", "seal", json!({"key_b64": key_b64, "plaintext_b64": B64.encode(b"hello noter")})).expect("seal");
-        let opened = host.call(&ctx, "ne", "unseal", json!({"key_b64": key_b64, "blob_b64": sealed["blob_b64"]})).expect("unseal");
-        assert_eq!(opened["plaintext_b64"], Value::String(B64.encode(b"hello noter")));
+        let opened = host.call(&ctx, "ne", "unseal", json!({"key_b64": key_b64, "blob_b64": sealed.output["blob_b64"]})).expect("unseal");
+        assert_eq!(opened.output["plaintext_b64"], Value::String(B64.encode(b"hello noter")));
 
         // wrong key -> clean failure, still receipted
-        assert!(host.call(&ctx, "ne", "unseal", json!({"key_b64": B64.encode([0x22u8; 32]), "blob_b64": sealed["blob_b64"]})).is_err());
+        assert!(host.call(&ctx, "ne", "unseal", json!({"key_b64": B64.encode([0x22u8; 32]), "blob_b64": sealed.output["blob_b64"]})).is_err());
 
         // sign -> verify roundtrip through the real Ed25519
-        let seed_b64 = kg["seed_b64"].as_str().unwrap();
+        let seed_b64 = kg.output["seed_b64"].as_str().unwrap();
         let sig = host.call(&ctx, "ne", "sign", json!({"seed_b64": seed_b64, "msg_b64": B64.encode(b"msg")})).expect("sign");
         let v = host.call(&ctx, "ne", "verify", json!({
-            "ed25519_b64": kg["ed25519_b64"], "msg_b64": B64.encode(b"msg"), "sig_b64": sig["sig_b64"]})).expect("verify");
-        assert_eq!(v["valid"], true);
+            "ed25519_b64": kg.output["ed25519_b64"], "msg_b64": B64.encode(b"msg"), "sig_b64": sig.output["sig_b64"]})).expect("verify");
+        assert_eq!(v.output["valid"], true);
         let v2 = host.call(&ctx, "ne", "verify", json!({
-            "ed25519_b64": kg["ed25519_b64"], "msg_b64": B64.encode(b"tampered"), "sig_b64": sig["sig_b64"]})).expect("verify2");
-        assert_eq!(v2["valid"], false);
+            "ed25519_b64": kg.output["ed25519_b64"], "msg_b64": B64.encode(b"tampered"), "sig_b64": sig.output["sig_b64"]})).expect("verify2");
+        assert_eq!(v2.output["valid"], false);
 
         // sealed-box roundtrip through the real X25519
         let sb = host.call(&ctx, "ne", "seal_for", json!({
-            "recipient": {"ed25519": kg["ed25519_b64"], "x25519": kg["x25519_b64"]},
+            "recipient": {"ed25519": kg.output["ed25519_b64"], "x25519": kg.output["x25519_b64"]},
             "plaintext_b64": B64.encode(b"for you")})).expect("seal_for");
-        let op = host.call(&ctx, "ne", "open_from", json!({"seed_b64": seed_b64, "sealed_b64": sb["sealed_b64"]})).expect("open_from");
-        assert_eq!(op["plaintext_b64"], Value::String(B64.encode(b"for you")));
+        let op = host.call(&ctx, "ne", "open_from", json!({"seed_b64": seed_b64, "sealed_b64": sb.output["sealed_b64"]})).expect("open_from");
+        assert_eq!(op.output["plaintext_b64"], Value::String(B64.encode(b"for you")));
 
         let n = host.verify_chain().expect("receipt chain must verify");
         assert!(n >= 8, "expected >=8 receipts, got {n}");

@@ -155,18 +155,18 @@ mod tests {
         let f = host
             .call(&ctx, "na", "to_frames", json!({"bundle_b64": bundle_b64}))
             .expect("to_frames");
-        let frames = f["frames"].as_array().unwrap();
+        let frames = f.output["frames"].as_array().unwrap();
         assert!(!frames.is_empty());
 
         let q = host
             .call(&ctx, "na", "qr_encodable", json!({"frames": frames}))
             .expect("qr_encodable");
-        assert_eq!(q["encodable"], true);
+        assert_eq!(q.output["encodable"], true);
 
         let b = host
             .call(&ctx, "na", "from_frames", json!({"frames": frames}))
             .expect("from_frames");
-        assert_eq!(b["bundle_b64"], Value::String(bundle_b64));
+        assert_eq!(b.output["bundle_b64"], Value::String(bundle_b64));
 
         let n = host.verify_chain().expect("receipt chain must verify");
         assert!(n >= 4, "expected >=4 receipts, got {n}");

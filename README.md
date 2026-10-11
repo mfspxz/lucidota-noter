@@ -1,7 +1,7 @@
 # NOTER — E2EE notes (built 2026-10-07)
 
-Rust workspace, 13 crates, **124+ tests green** (`cargo test` full pass
-2026-10-10).
+Rust workspace, 13 crates, **133 tests green** (`cargo test --workspace`
+full pass 2026-10-10, rc=0).
 
 | Crate | Item | What |
 |---|---|---|

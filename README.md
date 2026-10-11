@@ -1,3 +1,5 @@
+[Active R&D Lab] — no CI runs on record; active development, expect rough edges.
+
 # NOTER — E2EE notes (built 2026-10-07)
 
 Rust workspace, 13 crates, **133 tests green** (`cargo test --workspace`

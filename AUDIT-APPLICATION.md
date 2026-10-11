@@ -124,6 +124,6 @@ seq=255 dossier, memory/2026-10-07.md#L41).
   header edit; never push)
 
 ## Tests
-- `cargo test --workspace`: **exit 0, full pass** (measured 2026-10-10,
-  ~7.7 min suite). `-p noter-redteam`: 13/13 attack tests green
-  (measured). 120/120 total per README/Spree baseline.
+- `cargo test --workspace`: **exit 0, 133 passed, 0 failed** (measured
+  2026-10-10, full run incl. second-sweep changes).
+- `-p noter-redteam`: 13/13 attack tests green (measured).

@@ -89,10 +89,10 @@ fn discover_on(port: u16, window: Duration) -> Result<Vec<Beacon>, MeshError> {
     while Instant::now() < end {
         match sock.recv_from(&mut buf) {
             Ok((n, src)) => {
-                if let Some(b) = Beacon::decode(&buf[..n], src.ip()) {
-                    if !seen.iter().any(|x| x.device_id == b.device_id) {
-                        seen.push(b);
-                    }
+                if let Some(b) = Beacon::decode(&buf[..n], src.ip())
+                    && !seen.iter().any(|x| x.device_id == b.device_id)
+                {
+                    seen.push(b);
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock

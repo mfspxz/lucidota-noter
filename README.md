@@ -1,6 +1,9 @@
+[Active R&D Lab] — no CI runs on record; active development, expect rough edges.
+
 # NOTER — E2EE notes (built 2026-10-07)
 
-Rust workspace, 12 crates, **120 tests green** (`cargo test`).
+Rust workspace, 13 crates, **133 tests green** (`cargo test --workspace`
+full pass 2026-10-10, rc=0).
 
 | Crate | Item | What |
 |---|---|---|
@@ -16,6 +19,7 @@ Rust workspace, 12 crates, **120 tests green** (`cargo test`).
 | noter-mobile | noter-008 | Offline-first field layer: sealed op queue, quick capture. |
 | noter-redteam | noter-011 | 13-attack battery + `REDTEAM.md` review. |
 | noter-organelle | noter-012 | Organelle-host adapter, codon `nt`. |
+| noter-auditlog | noter-013 | Append-only JSONL security-event log (failed unlocks, rejected envelopes, unknown writers) — REDTEAM.md risk 7 fix, 2026-10-10. |
 
 `tauri-app/` — desktop shell scaffold (kept out of the workspace: sandbox
 lacks webkit2gtk to link Tauri; all logic is tested in `noter-ui`).

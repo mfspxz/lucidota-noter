@@ -1,6 +1,6 @@
 use crate::{Envelope, VectorCmp, VersionVector};
 use noter_crypto::{DeviceIdentity, PublicIdentity, SecretBytes};
-use noter_store::{now_ms, Store, StoreError};
+use noter_store::{Store, StoreError};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -85,6 +85,30 @@ impl<'a> SyncEngine<'a> {
         }
     }
 
+    /// GC conflict copies for `note_id` down to MAX_CONFLICT_COPIES,
+    /// tombstoning the oldest first. Called after every conflict-copy
+    /// write, so the bound holds per round, not eventually.
+    fn gc_conflict_copies(&self, note_id: &str) -> Result<(), SyncError> {
+        let prefix = format!("{}/conflict/", note_id);
+        let mut copies: Vec<(i64, String)> = Vec::new();
+        for rec in self.store.list_notes(true)? {
+            if !rec.deleted && rec.note_id.starts_with(&prefix) {
+                copies.push((rec.updated_ms, rec.note_id.clone()));
+            }
+        }
+        if copies.len() > MAX_CONFLICT_COPIES {
+            copies.sort();
+            let excess = copies.len() - MAX_CONFLICT_COPIES;
+            for (_, id) in copies.iter().take(excess) {
+                if let Ok(rec) = self.store.get_note(id) {
+                    let plain = self.store.open_payload(&rec.payload_sealed)?;
+                    self.store.put_note(id, &plain, &rec.vv, true)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Export all notes changed since `since_ms` as signed envelopes.
     pub fn export(&self, since_ms: i64) -> Result<Vec<Envelope>, SyncError> {
         let mut out = Vec::new();
@@ -161,6 +185,7 @@ impl<'a> SyncEngine<'a> {
                             &local_vv.to_bytes(),
                             false,
                         )?;
+                        self.gc_conflict_copies(&h.note_id)?;
                     }
                     let mut merged_vv = h.vv.merge(&local_vv);
                     merged_vv.bump(&h.writer_id);
@@ -177,6 +202,7 @@ impl<'a> SyncEngine<'a> {
                         conflict_copy_id(&h.note_id, &h.writer_id, h.vv.total());
                     self.store
                         .put_note(&conflict_id, &plain, &h.vv.to_bytes(), h.deleted)?;
+                    self.gc_conflict_copies(&h.note_id)?;
                     let mut merged_vv = local_vv.merge(&h.vv);
                     merged_vv.bump(&self.device_id); // == winner here
                     // Re-stamp local record with merged vv so the conflict resolves next round.
@@ -224,6 +250,14 @@ fn conflict_copy_id(note_id: &str, writer: &str, total: u64) -> String {
     format!("{}/conflict/{}/{}", note_id, writer, total)
 }
 
+/// GC policy (REDTEAM.md risk 6 / brutal-audit R-4 #6): keep at most
+/// this many LIVE conflict copies per note, oldest-first (by
+/// `updated_ms`, then id). A pathological peer spamming conflicts can
+/// no longer grow live state unboundedly. Honest bound: GC tombstones
+/// (sync-correct — the deletion propagates); tombstone rows are not
+/// compacted, so hostile spam still grows tombstone history slowly.
+const MAX_CONFLICT_COPIES: usize = 8;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,11 +265,6 @@ mod tests {
 
     fn master() -> SecretBytes {
         SecretBytes::new([0x55u8; 32])
-    }
-
-    struct Dev<'a> {
-        eng: SyncEngine<'a>,
-        _id: DeviceIdentity,
     }
 
     fn device<'a>(name: &str, store: &'a Store) -> (DeviceIdentity, SyncEngine<'a>) {
@@ -449,5 +478,31 @@ mod tests {
         let out = eb.import(&ea.export(0).unwrap()).unwrap();
         assert!(matches!(out[0], MergeOutcome::Applied { .. }));
         assert!(sb.get_note("n1").unwrap().deleted);
+    }
+
+    #[test]
+    fn conflict_copy_gc_caps_live_copies() {
+        let s = Store::open_memory(&master()).unwrap();
+        let (_id, e) = device("a", &s);
+        for i in 0..12u64 {
+            let cid = format!("n1/conflict/w{i}/{i}");
+            s.put_note(&cid, b"x", &[], false).unwrap();
+        }
+        e.gc_conflict_copies("n1").unwrap();
+        let live: Vec<_> = s
+            .list_notes(true)
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.note_id.starts_with("n1/conflict/") && !r.deleted)
+            .collect();
+        assert_eq!(live.len(), 8, "GC must keep exactly 8 live copies");
+        // Unrelated notes and other notes' conflicts untouched.
+        let other: Vec<_> = s
+            .list_notes(true)
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.note_id.starts_with("n2/conflict/"))
+            .collect();
+        assert!(other.is_empty());
     }
 }

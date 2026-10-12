@@ -1,0 +1,9 @@
+[package]
+name = "noter-auditlog"
+version = "0.1.0"
+edition = "2024"
+description = "NOTER-013: append-only JSONL security-event log (failed unlocks, rejected envelopes, unknown writers)."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

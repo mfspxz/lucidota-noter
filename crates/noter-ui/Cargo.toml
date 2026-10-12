@@ -5,6 +5,7 @@ edition = "2024"
 description = "NOTER desktop command layer: every UI operation as a tested pure function over the core. Tauri shell wiring lives in tauri-app/."
 
 [dependencies]
+noter-auditlog = { path = "../noter-auditlog" }
 noter-crypto = { path = "../noter-crypto" }
 noter-store = { path = "../noter-store" }
 noter-model = { path = "../noter-model" }

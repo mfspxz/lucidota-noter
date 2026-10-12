@@ -1,11 +1,9 @@
-use crate::{NoteSummary, NoteView, SearchHit, SyncReport};
+use noter_auditlog::{AuditLog, EventKind};
 use noter_crypto::{derive_master_key, derive_subkey, DeviceIdentity, PublicIdentity, Salt, SecretBytes};
-use noter_mesh::Session;
-use noter_model::{Note, Notes};
-use noter_search::SearchIndex;
-use noter_store::{now_ms, Store, StoreError};
-use noter_sync::{MergeOutcome, SyncEngine};
-use std::path::Path;
+use noter_model::Notes;
+use noter_store::{Store, StoreError};
+use noter_sync::SyncEngine;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -34,19 +32,42 @@ pub struct App {
     master: SecretBytes,
     device_id: String,
     identity: DeviceIdentity,
+    audit: Option<AuditLog>,
+}
+
+/// Sibling audit-log path for a vault file: `vault.db` -> `vault.audit.jsonl`.
+fn audit_path(db_path: &Path) -> PathBuf {
+    db_path.with_extension("audit.jsonl")
 }
 
 impl App {
     /// Open (or create) the vault at `db_path`, deriving the master key
-    /// from the passphrase via Argon2id.
+    /// from the passphrase via Argon2id. Unlock failures are recorded in
+    /// the sibling audit log (REDTEAM.md risk 7 fix).
     pub fn unlock(db_path: &Path, passphrase: &str, salt: &Salt) -> Result<Self, AppError> {
-        let master = derive_master_key(passphrase, salt)?;
+        let master = match derive_master_key(passphrase, salt) {
+            Ok(m) => m,
+            Err(e) => {
+                if let Ok(log) = AuditLog::open(&audit_path(db_path)) {
+                    log.log(EventKind::UnlockFailed, "passphrase KDF failed");
+                }
+                return Err(e.into());
+            }
+        };
         Self::open_with_master(db_path, master)
     }
 
     /// Open with an already-derived master key (tests / alternate unlock).
     pub fn open_with_master(db_path: &Path, master: SecretBytes) -> Result<Self, AppError> {
-        let store = Store::open(db_path, &master)?;
+        let store = match Store::open(db_path, &master) {
+            Ok(s) => s,
+            Err(e) => {
+                if let Ok(log) = AuditLog::open(&audit_path(db_path)) {
+                    log.log(EventKind::UnlockFailed, "vault open failed (wrong key or tampered file)");
+                }
+                return Err(e.into());
+            }
+        };
         // Deterministic device identity from the master key: same passphrase
         // on a fresh install recovers the same device identity.
         let id_sub = derive_subkey(&master, b"noter/device-id/v1");
@@ -64,7 +85,16 @@ impl App {
             master,
             device_id,
             identity,
+            audit: AuditLog::open(&audit_path(db_path)).ok(),
         })
+    }
+
+    /// Record a security event in the vault's audit log. No-op when the
+    /// log could not be opened. Logging never fails the caller.
+    pub(crate) fn audit(&self, kind: EventKind, detail: &str) {
+        if let Some(log) = &self.audit {
+            log.log(kind, detail);
+        }
     }
 
     pub(crate) fn engine(&self) -> SyncEngine<'_> {

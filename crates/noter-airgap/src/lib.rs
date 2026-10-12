@@ -315,7 +315,7 @@ mod tests {
         mixed.sort();
         mixed.dedup();
         // Different checksums -> mismatch (unless single-frame bundles coincide).
-        if f1.len() > 0 && f2.len() > 0 {
+        if !f1.is_empty() && !f2.is_empty() {
             let r = from_frames(&[f1[0].clone(), f2[0].clone()]);
             assert!(r.is_err());
         }

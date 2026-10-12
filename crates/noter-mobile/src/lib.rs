@@ -12,7 +12,7 @@
 //!   single text blob, the core field interaction.
 
 use noter_crypto::SecretBytes;
-use noter_store::{Store, StoreError};
+use noter_store::StoreError;
 use noter_ui::{App, AppError, NoteView};
 use serde::{Deserialize, Serialize};
 use std::path::Path;

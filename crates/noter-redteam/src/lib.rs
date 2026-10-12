@@ -17,8 +17,6 @@
 //! - R11: envelope with valid signature but unknown writer -> rejected.
 //! - R12: tampered note JSON inside valid envelope -> AEAD rejects before parse.
 
-use noter_crypto::*;
-
 // Re-exported for the attack modules.
 pub use noter_airgap as airgap;
 pub use noter_mesh as mesh;

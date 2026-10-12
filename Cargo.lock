@@ -379,6 +379,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hmac"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,6 +474,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "noter-auditlog"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "noter-crypto"
 version = "0.1.0"
 dependencies = [
@@ -525,6 +542,7 @@ name = "noter-organelle"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "noter-airgap",
  "noter-crypto",
  "noter-model",
  "noter-search",
@@ -536,6 +554,7 @@ dependencies = [
  "organelle-manifest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
 ]
 
@@ -606,6 +625,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "noter-airgap",
+ "noter-auditlog",
  "noter-crypto",
  "noter-mesh",
  "noter-model",
@@ -645,6 +665,7 @@ name = "organelle-host"
 version = "1.0.0"
 dependencies = [
  "hex",
+ "hmac",
  "organelle-manifest",
  "serde",
  "serde_json",

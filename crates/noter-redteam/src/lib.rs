@@ -16,6 +16,17 @@
 //! - R10: passphrase brute-force cost sanity (KDF params as configured).
 //! - R11: envelope with valid signature but unknown writer -> rejected.
 //! - R12: tampered note JSON inside valid envelope -> AEAD rejects before parse.
+//! - R13: garbage / u64::MAX version vectors -> tolerated, no panic.
+//! Legallibrary battery (2026-11-20):
+//! - R14: forged corpus (fake text + recomputed id + real provenance) without
+//!   a valid signature under the trusted key -> rejected at open.
+//! - R15: tampered text with stale id -> load_corpus rejects.
+//! - R16: provenance hash mismatch vs raw manifest -> rejected at open.
+//! - R17: fake official URL (not in raw manifest) -> rejected at open.
+//! - R18: duplicate source ids -> load_corpus rejects.
+//! - R19: tier-confusion at rank_authority (tier disagrees with URL) -> rejected.
+//! - R20: hostile resolve queries -> answer, never error or panic.
+//! - R21: wrong corpus version (validly signed) -> rejected.
 
 // Re-exported for the attack modules.
 pub use noter_airgap as airgap;

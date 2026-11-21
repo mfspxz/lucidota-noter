@@ -15,3 +15,8 @@ noter-search = { path = "../noter-search" }
 noter-share = { path = "../noter-share" }
 noter-ui = { path = "../noter-ui" }
 serde_json = "1"
+
+[dev-dependencies]
+noter-legal-authority = { path = "../noter-legal-authority" }
+legal-authority-engine = { path = "../../../legallibrary-organelle/engine" }
+organelle-host = { path = "../../../organelles/crates/organelle-host" }

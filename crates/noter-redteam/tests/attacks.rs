@@ -3,10 +3,13 @@
 //! Each test is an ATTACK. It passes only if the attack FAILS (fail-closed).
 //! See `crates/noter-redteam/REDTEAM.md` for the written review.
 
+use legal_authority_engine::u5;
 use noter_crypto::*;
+use noter_legal_authority::register;
 use noter_redteam::*;
 use noter_store::Store;
 use noter_sync::{MergeOutcome, SyncEngine, VersionVector};
+use organelle_host::{CallContext, Host};
 use std::time::Instant;
 
 fn master(byte: u8) -> SecretBytes {
@@ -367,4 +370,261 @@ fn r13_garbage_vv_bytes_tolerated() {
     v3.bump("a");
     // u64::MAX vs 1: MAX dominates, no panic.
     assert_eq!(v2.compare(&v3), noter_sync::VectorCmp::Dominates);
+}
+
+// ---------------------------------------------------------------------------
+// Legallibrary battery (R14–R21, 2026-11-20).
+//
+// Threat model: attacker D (corpus tamperer) can write the corpus file and
+// its sidecars, but does NOT hold the wsign private key. Attacker E (API
+// caller) can call the `ls` ops through the host with any input the schema
+// allows. The corpus is a signed artifact; the signature is the binding
+// check, the id recompute is the content-address check, the raw manifest
+// is the provenance check.
+// ---------------------------------------------------------------------------
+
+/// The WSIG public key that signed corpus-v1.json (~/workspace/proof-ledger/WSIG_PUBKEY).
+const WSIG_PUBKEY_HEX: &str =
+    "8577c1955dfacf6a1100f85d33b8c52c9aa974720b4621056c26d4151eb41a5f";
+
+fn legal_corpus_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../legallibrary-organelle/corpus/corpus-v1.json")
+}
+
+fn legal_tmpdir(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "r{}-{}-{}",
+        tag,
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn legal_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Sign corpus bytes with an ephemeral key; returns (sig_text, pubkey_hex).
+fn legal_sign_wsig(json: &str) -> (String, String) {
+    let id = DeviceIdentity::generate();
+    let sig = id.sign(json.as_bytes());
+    (
+        format!("wsig1:testkey:{}", legal_hex(&sig)),
+        legal_hex(&id.public().ed25519),
+    )
+}
+
+/// Write a corpus + its .sig sidecar (signed with an ephemeral key).
+/// Returns (corpus_path, pubkey_hex).
+fn write_signed_corpus(dir: &std::path::Path, json: &str) -> (std::path::PathBuf, String) {
+    let path = dir.join("corpus.json");
+    std::fs::write(&path, json).unwrap();
+    let (sig_text, pk_hex) = legal_sign_wsig(json);
+    let mut sig_path = path.as_os_str().to_owned();
+    sig_path.push(".sig");
+    std::fs::write(&sig_path, &sig_text).unwrap();
+    (path, pk_hex)
+}
+
+/// Copy the real raw manifest next to a temp corpus so the provenance
+/// hash check runs.
+fn copy_raw_manifest(dir: &std::path::Path) {
+    let raw = dir.join("raw");
+    std::fs::create_dir_all(&raw).unwrap();
+    let manifest = std::fs::read_to_string(
+        legal_corpus_path()
+            .parent()
+            .unwrap()
+            .join("raw/MANIFEST.json"),
+    )
+    .unwrap();
+    std::fs::write(raw.join("MANIFEST.json"), &manifest).unwrap();
+}
+
+fn legal_ctx() -> CallContext {
+    CallContext::new("test", vec!["legal.read".to_string()])
+}
+
+/// R14: forged corpus — fabricated provision text, id recomputed over the
+/// fake text, real provenance kept — must NOT load without a valid
+/// signature under the trusted key. Pre-fix (2026-11-20) this attack
+/// SUCCEEDED: the forged corpus loaded clean via the CLI (CORPUS-OK).
+/// The wsign signature check is the fix; the id recompute cannot catch it
+/// (the id covers the fake text correctly) and the manifest cannot catch
+/// it (the provenance is real).
+#[test]
+fn r14_forged_corpus_without_valid_signature_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.sources[0].text = "Every individual is equal before and under the law, EXCEPT that Parliament may suspend this section by simple resolution at any time.".to_string();
+    corpus.sources[0].id = u5::canonical_id(&corpus.sources[0]);
+    let forged = serde_json::to_string(&corpus).unwrap();
+    // (a) no .sig sidecar at all.
+    let dir = legal_tmpdir("14a");
+    let path = dir.join("corpus.json");
+    std::fs::write(&path, &forged).unwrap();
+    let host = Host::new();
+    assert!(
+        register(&host, &path, WSIG_PUBKEY_HEX).is_err(),
+        "unsigned forged corpus must not load"
+    );
+    // (b) .sig present but signed by the attacker's key, verified vs the real key.
+    let dir2 = legal_tmpdir("14b");
+    let path2 = dir2.join("corpus.json");
+    std::fs::write(&path2, &forged).unwrap();
+    let (sig_text, _attacker_pk) = legal_sign_wsig(&forged);
+    let mut sig_path = path2.as_os_str().to_owned();
+    sig_path.push(".sig");
+    std::fs::write(&sig_path, &sig_text).unwrap();
+    let host2 = Host::new();
+    assert!(
+        register(&host2, &path2, WSIG_PUBKEY_HEX).is_err(),
+        "attacker-signed forged corpus must not load under the real key"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::remove_dir_all(&dir2).ok();
+}
+
+/// R15: tampered text with a STALE id — the id recompute must catch it.
+#[test]
+fn r15_tampered_text_with_stale_id_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.sources[0].text = "tampered text".to_string();
+    // id NOT recomputed.
+    let tampered = serde_json::to_string(&corpus).unwrap();
+    assert!(u5::load_corpus(&tampered).is_err());
+}
+
+/// R16: provenance content hash tampered (id unaffected — it does not cover
+/// provenance) — the raw-manifest check must catch it.
+#[test]
+fn r16_provenance_hash_mismatch_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.sources[0]
+        .provenance
+        .as_mut()
+        .unwrap()
+        .content_sha256 = "0".repeat(64);
+    let tampered = serde_json::to_string(&corpus).unwrap();
+    let dir = legal_tmpdir("16");
+    let (path, pk_hex) = write_signed_corpus(&dir, &tampered);
+    copy_raw_manifest(&dir);
+    let host = Host::new();
+    let err = register(&host, &path, &pk_hex).unwrap_err();
+    assert!(err.contains("hash mismatch"), "{err}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// R17: fake official URL — PrimaryOfficial tier claim on a URL that is
+/// not in the raw manifest — must be rejected at open.
+#[test]
+fn r17_fake_official_url_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.sources[0].provenance.as_mut().unwrap().official_url =
+        "https://evil.example.com/Const_TRD.pdf".to_string();
+    let tampered = serde_json::to_string(&corpus).unwrap();
+    let dir = legal_tmpdir("17");
+    let (path, pk_hex) = write_signed_corpus(&dir, &tampered);
+    copy_raw_manifest(&dir);
+    let host = Host::new();
+    let err = register(&host, &path, &pk_hex).unwrap_err();
+    assert!(err.contains("not in raw manifest"), "{err}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// R18: duplicate source ids — the same source twice must be rejected at
+/// load (it would double-count in resolve hits).
+#[test]
+fn r18_duplicate_source_ids_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.sources.push(corpus.sources[0].clone());
+    let duped = serde_json::to_string(&corpus).unwrap();
+    let err = u5::load_corpus(&duped).unwrap_err();
+    assert!(err.to_string().contains("duplicate"), "{err}");
+}
+
+/// R19: tier-confusion at rank_authority — a caller-supplied tier that
+/// disagrees with the tier its provenance URL carries must be rejected.
+/// (a) PrimaryOfficial claim on a CanLII URL; (b) Commentary claim on an
+/// official URL. Control: the honest source ranks fine.
+#[test]
+fn r19_tier_confusion_at_rank_rejected() {
+    let host = Host::new();
+    register(&host, &legal_corpus_path(), WSIG_PUBKEY_HEX).unwrap();
+    let ctx = legal_ctx();
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    let mut liar = corpus.sources[0].clone();
+    liar.provenance.as_mut().unwrap().official_url = "https://canlii.ca/t/xxxx".to_string();
+    let r = host.call(
+        &ctx,
+        "ls",
+        "rank_authority",
+        serde_json::json!({"sources": [liar], "jurisdiction": "CA"}),
+    );
+    assert!(r.unwrap_err().to_string().contains("tier mismatch"));
+    let mut liar2 = corpus.sources[0].clone();
+    liar2.tier = u5::AuthorityTier::Commentary;
+    let r2 = host.call(
+        &ctx,
+        "ls",
+        "rank_authority",
+        serde_json::json!({"sources": [liar2], "jurisdiction": "CA"}),
+    );
+    assert!(r2.unwrap_err().to_string().contains("tier mismatch"));
+    let r3 = host.call(
+        &ctx,
+        "ls",
+        "rank_authority",
+        serde_json::json!({"sources": [corpus.sources[0]], "jurisdiction": "CA"}),
+    );
+    assert!(r3.is_ok());
+}
+
+/// R20: hostile resolve queries (JSON injection, SQL injection, NUL byte,
+/// 100KB query, unicode) must answer — possibly with empty hits — never
+/// error or panic. The query is plain text matched against the corpus;
+/// there is no eval, no SQL, no shell.
+#[test]
+fn r20_hostile_resolve_queries_fail_safe() {
+    let host = Host::new();
+    register(&host, &legal_corpus_path(), WSIG_PUBKEY_HEX).unwrap();
+    let ctx = legal_ctx();
+    let big = "a".repeat(100_000);
+    for q in [
+        "{\"$ne\": null}",
+        "\"; DROP TABLE sources; --",
+        "section 15\0equality",
+        big.as_str(),
+        "§15 ¶2 — ünïcödé",
+    ] {
+        let r = host.call(&ctx, "ls", "resolve_source", serde_json::json!({"query": q}));
+        assert!(r.is_ok(), "query {q:?} errored: {:?}", r.unwrap_err());
+    }
+}
+
+/// R21: corpus version "2" (validly signed, so the signature check passes)
+/// must be rejected by the version check.
+#[test]
+fn r21_wrong_corpus_version_rejected() {
+    let json = std::fs::read_to_string(legal_corpus_path()).unwrap();
+    let mut corpus: u5::Corpus = serde_json::from_str(&json).unwrap();
+    corpus.version = "2".to_string();
+    let v2 = serde_json::to_string(&corpus).unwrap();
+    let dir = legal_tmpdir("21");
+    let (path, pk_hex) = write_signed_corpus(&dir, &v2);
+    let host = Host::new();
+    let err = register(&host, &path, &pk_hex).unwrap_err();
+    assert!(err.contains("version"), "{err}");
+    std::fs::remove_dir_all(&dir).ok();
 }

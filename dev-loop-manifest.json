@@ -1,0 +1,93 @@
+{
+  "subject": "noter",
+  "subject_kind": "app",
+  "version": 1,
+  "epoch_started_at": "2026-11-20T00:00:00Z",
+  "treatments": [
+    {
+      "id": "build",
+      "required": true,
+      "receipt": "dev-loop/receipts/build.json",
+      "receipt_sha256": "43953b818c55881eb8421490d61a1bb1f26b93d482401eb54e5aacfecc30a211",
+      "verdict": "pass",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "cargo-build"
+    },
+    {
+      "id": "test",
+      "required": true,
+      "receipt": "dev-loop/receipts/test.json",
+      "receipt_sha256": "f307bc86e6a4445499c782f0627c3a28fc0d16f816fd1ef7138487f93c8838eb",
+      "verdict": "pass",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "cargo-test"
+    },
+    {
+      "id": "verify",
+      "required": true,
+      "receipt": "dev-loop/receipts/verify.json",
+      "receipt_sha256": "",
+      "verdict": "pending",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "adv-verifier",
+      "notes": "adv-verifier is full-send-lane-shaped (envelope receipts + git commit + test_command); the plugin work has no full-send receipt. Adapter + git commit binding needed."
+    },
+    {
+      "id": "dogfood",
+      "required": true,
+      "receipt": "dev-loop/receipts/dogfood.json",
+      "receipt_sha256": "",
+      "verdict": "pending",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "dogfood-harness",
+      "notes": "Noter as daily notes needs a persistent vault; vault-custody decision is Zack's. Plugin-side dogfood (plugin vs real corpus) is the legallibrary subject's dogfood treatment."
+    },
+    {
+      "id": "redteam",
+      "required": true,
+      "receipt": "dev-loop/receipts/redteam.json",
+      "receipt_sha256": "17d8745df4ec9cdf91a99c26187d03ed04c2830b2298813903287d43f833ec86",
+      "verdict": "pass",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "redteam-battery"
+    },
+    {
+      "id": "manual",
+      "required": true,
+      "receipt": "dev-loop/receipts/manual.json",
+      "receipt_sha256": "",
+      "verdict": "pending",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "manual-forge",
+      "notes": "No Noter app manual exists yet (legallibrary MANUAL.md covers the plugin only). Manual Forge task."
+    },
+    {
+      "id": "sign",
+      "required": true,
+      "receipt": "dev-loop/receipts/sign.json",
+      "receipt_sha256": "ffa06345d2cb1735325689e1920059026533f6a1cbdcfe835e8d2eaa114dded1",
+      "verdict": "pass",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "wsign"
+    },
+    {
+      "id": "deploy",
+      "required": true,
+      "receipt": "dev-loop/receipts/deploy.json",
+      "receipt_sha256": "",
+      "verdict": "pending",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "deploy",
+      "notes": "Noter is a local workspace app; no deploy target defined. Needs Zack's definition of deploy for this subject."
+    },
+    {
+      "id": "observe",
+      "required": true,
+      "receipt": "dev-loop/receipts/observe.json",
+      "receipt_sha256": "239b117aa5f7ff3c17bb5b2c640795be8acfc09c37a13f9f320f195796e88c98",
+      "verdict": "pass",
+      "verdict_at": "2026-11-21T00:40:59Z",
+      "produced_by": "dev-loop-observe"
+    }
+  ]
+}

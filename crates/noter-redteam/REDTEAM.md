@@ -77,3 +77,50 @@ SQLCipher (AES-256-CBC+HMAC).
 The crypto core and protocol layers fail closed under the tested attacks.
 The weakest points are pairing UX (R-risk 1) and the missing security-event
 log (R-risk 7) — both are product work, not crypto work.
+
+---
+
+## Legallibrary battery (R14–R21, 2026-11-20)
+
+Additive section; the R-1/R-2 bounds above still govern the original 13.
+Same instance-scope rule applies: 8/8 GREEN means these 8 payloads fail,
+not that the class is closed.
+
+### Threat model (additive)
+
+- **Attacker D (corpus tamperer):** can write the corpus file and its
+  sidecars, but does NOT hold the wsign private key.
+- **Attacker E (API caller):** can call the `ls` ops through the host with
+  any input the schema allows.
+- Out of scope: private-key compromise (the signature is the trust root,
+  like pairing in R-risk 1), endpoint compromise.
+
+### Results: 8/8 attacks fail closed
+
+| # | Attack | Result |
+|---|--------|--------|
+| R14 | Forged corpus (fake text + recomputed id + real provenance), unsigned or attacker-signed | Rejected at open — wsign Ed25519 signature over the file bytes, verified against the trusted pubkey. **Pre-fix this attack SUCCEEDED** (2026-11-20, proven against the CLI: forged Charter s.1 loaded CORPUS-OK); the signature check is the fix |
+| R15 | Tampered text, stale id | `load_corpus` rejects (id recompute) |
+| R16 | Provenance hash tampered | Raw-manifest check rejects (`hash mismatch`) |
+| R17 | Fake official URL (evil.com, tier still PrimaryOfficial) | Raw-manifest check rejects (`not in raw manifest`) |
+| R18 | Duplicate source ids | `load_corpus` rejects (`duplicate source id`) — added 2026-11-20; previously accepted |
+| R19 | Tier-confusion at rank_authority (tier disagrees with URL) | Membrane check rejects (`tier mismatch`) — added 2026-11-20; previously ranked as declared |
+| R20 | Hostile resolve queries (JSON/SQL injection, NUL, 100KB, unicode) | Answers (possibly empty hits); no error, no panic — the query is plain text, no eval/SQL/shell |
+| R21 | Wrong corpus version (validly signed) | Version check rejects |
+
+### Residual risks (legallibrary)
+
+1. **The wsign private key is the trust root.** Key compromise lets an
+   attacker sign a forged corpus that loads cleanly. Custody of
+   `WSIG_KEY` is Zack's decision (open since Oct 12); the key lives on
+   the VM filesystem (mode 600) today.
+2. **Section text is not individually bound to the source PDF.** The
+   provenance hash covers the whole raw file, not the extracted section
+   text — so a corpus signed by the keyholder with wrong section text
+   still loads. The signature binds the corpus to the keyholder, not
+   the text to the PDF. Per-section content hashes (hash of the exact
+   extracted span) would close this; not implemented.
+3. **Rank inputs without provenance skip the tier check.** A
+   caller-supplied source with no provenance carries no URL evidence,
+   so its tier is taken as declared. Rank output for such sources
+   reflects the caller's claim, not a verified fact.
